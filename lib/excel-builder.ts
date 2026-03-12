@@ -100,20 +100,20 @@ function buildSeparateView(ws: ExcelJS.Worksheet, data: ParsedDirtyFile, clientN
   ws.mergeCells(1, 1, 1, totalCols);
   const r1c1 = ws.getRow(1).getCell(1);
   r1c1.font      = { bold: true, size: 14 };
-  r1c1.alignment = CENTER_ALIGN;
+  r1c1.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
 
   // Row 2: Period
   ws.addRow([`For Last 6 Weeks, Ending ${formatDate(data.latestDate)}`]);
   ws.mergeCells(2, 1, 2, totalCols);
   const r2c1 = ws.getRow(2).getCell(1);
   r2c1.font      = { size: 11 };
-  r2c1.alignment = CENTER_ALIGN;
+  r2c1.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
 
   // Row 3: empty
   ws.addRow([]);
 
   // Row 4: Vendor / client name
-  const vendorDisplay = data.vendorName || clientName;
+  const vendorDisplay = `Vendor: ${data.vendorName || clientName}`;
   ws.addRow([vendorDisplay]);
   ws.mergeCells(4, 1, 4, 5);
   ws.getRow(4).getCell(1).font = { bold: true, size: 11 };

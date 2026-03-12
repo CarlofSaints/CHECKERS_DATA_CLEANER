@@ -13,9 +13,10 @@ export default function HomePage() {
   const [clientName, setClientName]   = useState("");
   const [file, setFile]               = useState<File | null>(null);
   const [dragging, setDragging]       = useState(false);
-  const [status, setStatus]           = useState<"idle" | "processing" | "success" | "error">("idle");
+  const [status, setStatus]           = useState<"idle" | "validating" | "processing" | "success" | "error">("idle");
   const [result, setResult]           = useState<ProcessResult | null>(null);
   const [errorMsg, setErrorMsg]       = useState("");
+  const [warnings, setWarnings]       = useState<string[]>([]);
   const fileInputRef                  = useRef<HTMLInputElement>(null);
 
   function handleDrop(e: DragEvent<HTMLDivElement>) {
@@ -40,15 +41,45 @@ export default function HomePage() {
     setStatus("idle");
     setResult(null);
     setErrorMsg("");
+    setWarnings([]);
   }
 
   async function handleProcess() {
-    if (!file)           { setErrorMsg("Please select a file first");         setStatus("error"); return; }
-    if (!clientName.trim()) { setErrorMsg("Please enter the client name");    setStatus("error"); return; }
+    if (!file)              { setErrorMsg("Please select a file first");    setStatus("error"); return; }
+    if (!clientName.trim()) { setErrorMsg("Please enter the client name");  setStatus("error"); return; }
 
-    setStatus("processing");
+    setStatus("validating");
     setResult(null);
     setErrorMsg("");
+    setWarnings([]);
+
+    // Run validation first
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("clientName", clientName.trim());
+
+      const vRes  = await fetch("/api/validate", { method: "POST", body: fd });
+      const vJson = await vRes.json();
+
+      if (vJson.warnings && vJson.warnings.length > 0) {
+        // Show warnings and wait for user decision
+        setWarnings(vJson.warnings);
+        setStatus("idle");
+        return;
+      }
+    } catch {
+      // Validation failure should not block processing
+    }
+
+    await runProcess();
+  }
+
+  async function runProcess() {
+    if (!file) return;
+
+    setStatus("processing");
+    setWarnings([]);
 
     const fd = new FormData();
     fd.append("file", file);
@@ -71,16 +102,22 @@ export default function HomePage() {
     }
   }
 
+  function dismissWarnings() {
+    setWarnings([]);
+  }
+
   function reset() {
     setFile(null);
     setClientName("");
     setStatus("idle");
     setResult(null);
     setErrorMsg("");
+    setWarnings([]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  const canProcess = !!file && !!clientName.trim() && status !== "processing";
+  const isBusy     = status === "validating" || status === "processing";
+  const canProcess = !!file && !!clientName.trim() && !isBusy;
 
   return (
     <div className="flex-1 flex items-start justify-center pt-12 px-4 pb-16">
@@ -117,7 +154,7 @@ export default function HomePage() {
             <input
               type="text"
               value={clientName}
-              onChange={e => setClientName(e.target.value)}
+              onChange={e => { setClientName(e.target.value); setWarnings([]); }}
               placeholder="e.g. WAHL"
               style={{
                 width: '100%',
@@ -200,11 +237,68 @@ export default function HomePage() {
               width: '100%',
             }}
           >
-            {status === "processing" ? "⏳  Processing…" : "Convert & Upload to SharePoint"}
+            {status === "validating"  ? "⏳  Checking file…"         :
+             status === "processing"  ? "⏳  Processing…"             :
+             "Convert & Upload to SharePoint"}
           </button>
         </div>
 
-        {/* Error state */}
+        {/* ── Validation warnings ───────────────────────────────────────────── */}
+        {warnings.length > 0 && (
+          <div style={{
+            marginTop: '1rem',
+            background: '#1e293b',
+            border: '1px solid #f59e0b',
+            borderRadius: '10px',
+            padding: '1.25rem 1.5rem',
+          }}>
+            <p style={{ color: '#f59e0b', fontWeight: 700, fontSize: '1rem', marginBottom: '0.75rem' }}>
+              ⚠️  Validation warnings
+            </p>
+            <ul style={{ margin: 0, paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {warnings.map((w, i) => (
+                <li key={i} style={{ color: '#fde68a', fontSize: '0.88rem', lineHeight: 1.5 }}>{w}</li>
+              ))}
+            </ul>
+            <p style={{ marginTop: '0.85rem', color: '#94a3b8', fontSize: '0.82rem' }}>
+              You can proceed and ignore these warnings, or start over with the correct file.
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+              <button
+                onClick={runProcess}
+                style={{
+                  padding: '0.5rem 1.1rem',
+                  borderRadius: '6px',
+                  fontWeight: 700,
+                  fontSize: '0.88rem',
+                  background: '#F97316',
+                  color: '#fff',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                Proceed anyway
+              </button>
+              <button
+                onClick={reset}
+                style={{
+                  padding: '0.5rem 1.1rem',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  fontSize: '0.88rem',
+                  background: 'transparent',
+                  color: '#94a3b8',
+                  border: '1px solid #475569',
+                  cursor: 'pointer',
+                }}
+              >
+                Start over
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Error state ────────────────────────────────────────────────────── */}
         {status === "error" && (
           <div style={{
             marginTop: '1rem',
@@ -218,7 +312,7 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Success state */}
+        {/* ── Success state ──────────────────────────────────────────────────── */}
         {status === "success" && result && (
           <div style={{
             marginTop: '1rem',

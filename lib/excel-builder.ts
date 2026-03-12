@@ -145,14 +145,16 @@ function buildSeparateView(ws: ExcelJS.Worksheet, data: ParsedDirtyFile, clientN
   applyGroupCell(ws.getRow(6).getCell(34), 'DC Stock');
 
   // ── Row 7: Column headers ────────────────────────────────────────────────
-  ws.addRow(allCols);  // Row 7
-  ws.getRow(7).eachCell(cell => {
+  // Use getRow(7) directly — addRow() would append as row 8 because the
+  // Sell Price / DC Stock merges (6:7) have already registered row 7 internally.
+  const headerRow = ws.getRow(7);
+  allCols.forEach((col, idx) => {
+    const cell     = headerRow.getCell(idx + 1);
+    cell.value     = col;
     cell.font      = BOLD_FONT;
     cell.fill      = HEADER_FILL;
     cell.alignment = CENTER_ALIGN;
-    cell.border    = {
-      bottom: { style: 'thin', color: { argb: 'FF9DC3E6' } },
-    };
+    cell.border    = { bottom: { style: 'thin', color: { argb: 'FF9DC3E6' } } };
   });
 
   // ── Rows 8+: Data ────────────────────────────────────────────────────────

@@ -6,11 +6,17 @@
 
 import * as XLSX from 'xlsx';
 
+export interface ExtraSheet {
+  name: string;
+  data: (string | number | null)[][];
+}
+
 export interface ParsedDirtyFile {
   vendorName: string;       // from Vendor column first data row
   dateColumns: string[];    // e.g. ["21.12.2025 units", "28.12.2025 units", ...]
   latestDate: Date;         // most recent date across all date cols
   rows: Record<string, string | number | null>[];  // keyed by clean column name
+  extraSheets: ExtraSheet[]; // all sheets from dirty file except Vendor View & Separate View
 }
 
 // Columns to explicitly skip (by lowercase header)
@@ -155,5 +161,18 @@ export function parseDirtyFile(buffer: Buffer): ParsedDirtyFile {
     return out;
   });
 
-  return { vendorName, dateColumns, latestDate, rows };
+  // Collect all other sheets (pass-through to clean file)
+  const SKIP_SHEETS = new Set(['vendor view', 'separate view']);
+  const extraSheets: ExtraSheet[] = wb.SheetNames
+    .filter(n => !SKIP_SHEETS.has(n.trim().toLowerCase()))
+    .map(n => ({
+      name: n,
+      data: XLSX.utils.sheet_to_json<(string | number | null)[]>(wb.Sheets[n], {
+        header: 1,
+        defval: null,
+        raw: true,
+      }),
+    }));
+
+  return { vendorName, dateColumns, latestDate, rows, extraSheets };
 }

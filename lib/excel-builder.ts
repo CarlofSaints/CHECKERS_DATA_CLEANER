@@ -52,15 +52,36 @@ const GROUP_FILL: ExcelJS.Fill = {
 const CENTER_ALIGN: Partial<ExcelJS.Alignment> = { horizontal: 'center', vertical: 'middle', wrapText: true };
 const BOLD_FONT: Partial<ExcelJS.Font> = { bold: true };
 
+// Sheets fully built by this tool — never overwritten from dirty file
+const BUILT_SHEETS = new Set(['separate view', 'vendor view']);
+
 export async function buildCleanFile(data: ParsedDirtyFile, clientName: string): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
 
+  // Index extra sheets from dirty file by lowercase name for O(1) lookup
+  const extraByName = new Map<string, (string | number | null)[][]>();
+  for (const es of data.extraSheets) {
+    extraByName.set(es.name.trim().toLowerCase(), es.data);
+  }
+
+  // Helper: create a sheet and populate from dirty file if a matching name exists
+  function addSheet(name: string): ExcelJS.Worksheet {
+    const ws = wb.addWorksheet(name);
+    const srcData = extraByName.get(name.trim().toLowerCase());
+    if (srcData && !BUILT_SHEETS.has(name.trim().toLowerCase())) {
+      srcData.forEach(rowArr => {
+        ws.addRow(rowArr);
+      });
+    }
+    return ws;
+  }
+
   // Create all 5 sheets in the expected order
-  wb.addWorksheet('Parameter Selection');
-  wb.addWorksheet('Consolidated View');
-  wb.addWorksheet('Consolidated by P.Org');
+  addSheet('Parameter Selection');
+  addSheet('Consolidated View');
+  addSheet('Consolidated by P.Org');
   const separateWs = wb.addWorksheet('Separate View');
-  wb.addWorksheet('Vendor and VSR Total View');
+  addSheet('Vendor and VSR Total View');
 
   buildSeparateView(separateWs, data, clientName);
 
